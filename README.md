@@ -127,29 +127,17 @@ concurrent calls on one key and on many keys.
 
 ## Edge cases and what would change
 
-- **Provider cap is global, not per pod:** use shared state such as Redis with
-  an atomic script, split the budget across pods, or give each pod its own
-  provider credential.
-- **Process restart:** counters reset, so a new process starts with a full
-  allowance.
+- **Provider cap is global, not per pod:** per-process state cannot enforce a
+  fleet-wide cap. Use shared state such as Redis, split the budget across pods,
+  or give each pod its own provider credential.
+- **Process restart:** counters reset, so a restarted process starts with a
+  full allowance.
 - **Many distinct keys:** the dictionary grows forever. Add idle-key eviction
   if keys are not a small fixed set.
-- **Caller retries after `False`:** there is no `retry_after`, so an aggressive
-  caller may keep hammering. A production API would return a retry delay or
-  block until a slot is free.
-- **Allowed request then fails:** the slot stays used. Refunding it would make
-  the limiter more forgiving but also easier to abuse.
-- **Burst at a window boundary:** many slots can expire at the same moment and
-  the next burst is allowed immediately. Token bucket or GCRA smooths this.
-- **Changing `limit` or `window_seconds` at runtime:** not supported. The
-  values are fixed when the limiter is created.
-- **Provider returns 429:** handling that, with backoff and retries, belongs to
-  the caller; the limiter only makes a local prediction.
-- **Clock:** `time.monotonic` is per process. It is correct for measuring
-  elapsed time, but it is not a shared wall-clock time across machines.
-
-## Deliberately out of scope
-
-No Redis or other shared store, no async API, no background eviction thread,
-no `retry_after`, and no configuration reloading. The task asks for one clear,
-correct, thread-safe limiter, not a production rate-limiting service.
+- **Denied requests:** the caller decides whether to retry, queue, or drop.
+  The limiter has no `retry_after`, so an aggressive caller may keep hammering,
+  and provider 429s still need handling in the caller.
+- **Allowed request then fails:** the slot stays used. Refunding it would be
+  more forgiving but easier to abuse.
+- **Burst at a window boundary:** many slots can expire together and the next
+  burst is allowed immediately. Token bucket or GCRA smooths this.
